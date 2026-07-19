@@ -1,0 +1,45 @@
+#top-menu{
+    height:5em;
+    background-color: rgb(187, 187, 187);
+    gap:2em;
+    display:flex;
+    flex-direction: row;
+    margin:5px;
+}
+
+#box{
+    margin:auto;
+    height: 38em;
+    width:38em;
+    border: 1px solid black;
+    gap:10px;
+    position: relative;
+}
+
+
+.ball {
+    width: 30px;
+    height: 30px;
+    background-color: #ff4757;
+    border-radius: 50%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    }
+
+.ballPreview{
+   width: 30px;
+    height: 30px;
+    background-color: #ff4757;
+    border-radius: 50%;
+}
+
+.topBall{
+    background-color: aliceblue;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin:5px;
+    border: 1px solid black;
+}

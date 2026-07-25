@@ -1,77 +1,93 @@
-// 1. Grab the container and the button from the DOM
-const box = document.getElementById('box'); //[cite: 2, 3]
-const addOrbBtn = document.querySelector('.addButton');
+const box = document.getElementById('box');
 const topMenu = document.getElementById('top-menu');
-const NewBall = document.getElementById('addNewBall')
+const addNewBallBtn = document.getElementById('addNewBall');
 
+const ballColors = ['#ff4757', '#1e90ff', '#2ed573', '#ffa502', '#ff6b81', '#00b894'];
 
-NewBall.addEventListener('click', () => {
-   
-    const ballWrapper = document.createElement('div');
-    ballWrapper.classList.add('topBall');
-
-    ballWrapper.innerHTML = `
-        <div class="ballPreview"></div>
-        <div class="addSubtract">
-            <button class="addButton">+</button> 
-            <span class="ballCount">1</span> 
-            <button class="subtractButton">-</button>  
-        </div>
-    `;
-
-
-    topMenu.appendChild(ballWrapper);
-    
-    console.log('ball controls added');
-});
-
-// 2. Add an event listener to spawn a ball when clicked
-addOrbBtn.addEventListener('click', () => {
-    
-    // Dynamically calculate actual box dimensions in pixels (handling 'em' units)
+function spawnBall(color) {
     const boxWidth = box.clientWidth;
     const boxHeight = box.clientHeight;
 
-    // Create the ball element dynamically and add it to the box
-    const ball = document.createElement('div'); //[cite: 2]
-    ball.classList.add('ball'); //[cite: 2]
-    box.appendChild(ball); //[cite: 2]
+    const ball = document.createElement('div');
+    ball.classList.add('ball');
+    ball.style.backgroundColor = color;
+    box.appendChild(ball);
 
-    // Set up the ball's initial state
-    const ballSize = 30; //
-    let posX = Math.random() * (boxWidth - ballSize);  // Random starting X[cite: 2]
-    let posY = Math.random() * (boxHeight - ballSize); // Random starting Y[cite: 2]
-    
-    // Speed/Velocity - Adding slight randomness so multiple balls don't clump together
-    let dx = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 2); 
-    let dy = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 2); 
+    const ballSize = 30;
+    let posX = Math.random() * Math.max(1, boxWidth - ballSize);
+    let posY = Math.random() * Math.max(1, boxHeight - ballSize);
 
-    // The animation loop for this specific ball
+    let dx = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 2);
+    let dy = (Math.random() > 0.5 ? 1 : -1) * (3 + Math.random() * 2);
+
     function moveBall() {
-        // Update the position variables
-        posX += dx; //[cite: 2]
-        posY += dy; //[cite: 2]
+        posX += dx;
+        posY += dy;
 
-        // Check for horizontal collisions (left or right walls)
-        if (posX <= 0 || posX >= (boxWidth - ballSize)) { //[cite: 2]
-            dx = -dx; // Reverse horizontal direction[cite: 2]
-            posX = Math.max(0, Math.min(posX, boxWidth - ballSize)); // Anti-clipping fix[cite: 2]
+        if (posX <= 0 || posX >= boxWidth - ballSize) {
+            dx = -dx;
+            posX = Math.max(0, Math.min(posX, boxWidth - ballSize));
         }
 
-        // Check for vertical collisions (top or bottom walls)
-        if (posY <= 0 || posY >= (boxHeight - ballSize)) { //[cite: 2]
-            dy = -dy; // Reverse vertical direction[cite: 2]
-            posY = Math.max(0, Math.min(posY, boxHeight - ballSize)); // Anti-clipping fix[cite: 2]
+        if (posY <= 0 || posY >= boxHeight - ballSize) {
+            dy = -dy;
+            posY = Math.max(0, Math.min(posY, boxHeight - ballSize));
         }
 
-        // Apply the new positions to the ball's CSS style
-        ball.style.left = posX + 'px'; //[cite: 2]
-        ball.style.top = posY + 'px'; //[cite: 2]
+        ball.style.left = `${posX}px`;
+        ball.style.top = `${posY}px`;
 
-        // Call the next frame of the animation
-        requestAnimationFrame(moveBall); //[cite: 2]
+        requestAnimationFrame(moveBall);
     }
 
-    // Kick off the animation for this ball
-    requestAnimationFrame(moveBall); //[cite: 2]
-});
+    requestAnimationFrame(moveBall);
+    return ball;
+}
+
+    function createBallControl() {
+    const ballWrapper = document.createElement('div');
+    ballWrapper.classList.add('topBall');
+
+    const color = ballColors[(topMenu.querySelectorAll('.topBall').length) % ballColors.length];
+    ballWrapper.dataset.color = color;
+
+    ballWrapper.innerHTML = `
+        <div class="ballPreview" style="background-color:${color};"></div>
+        <div class="addSubtract">
+            <button class="addButton" type="button">+</button>
+            <span class="ballCount">0</span>
+            <button class="subtractButton" type="button">-</button>
+        </div>
+    `;
+
+    const addButton = ballWrapper.querySelector('.addButton');
+    const subtractButton = ballWrapper.querySelector('.subtractButton');
+    const countLabel = ballWrapper.querySelector('.ballCount');
+    const ballPreview = ballWrapper.querySelector('.ballPreview');
+    const spawnedBalls = [];
+
+    addButton.addEventListener('click', () => {
+        const newBall = spawnBall(color);
+        spawnedBalls.push(newBall);
+        countLabel.textContent = spawnedBalls.length;
+    });
+
+    subtractButton.addEventListener('click', () => {
+        const lastBall = spawnedBalls.pop();
+        if (lastBall) {
+            lastBall.remove();
+            countLabel.textContent = spawnedBalls.length;
+        }
+    });
+
+    ballPreview.addEventListener('click', () => {
+        ballWrapper.style.border = '2px solid red'
+        
+
+    })
+
+    topMenu.appendChild(ballWrapper);
+}
+
+addNewBallBtn.addEventListener('click', createBallControl);
+createBallControl();

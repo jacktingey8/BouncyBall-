@@ -1,3 +1,11 @@
+main {
+    display: flex;
+    flex-direction: row;
+    margin: 5px;
+    height: 100%;
+    align-items: flex-start; /* Prevents vertical stretching shifts */
+}
+
 #top-menu{
     height:5em;
     background-color: rgb(187, 187, 187);
@@ -18,8 +26,8 @@
 
 
 .ball {
-    width: 30px;
-    height: 30px;
+    width: 15px;
+    height: 15px;
     background-color: #ff4757;
     border-radius: 50%;
     position: absolute;
@@ -32,6 +40,7 @@
     height: 30px;
     background-color: #ff4757;
     border-radius: 50%;
+    cursor: pointer;
 }
 
 .topBall{
@@ -43,3 +52,21 @@
     margin:5px;
     border: 1px solid black;
 }
+
+.ballInfo {
+    display: flex;
+    flex-direction: column;
+    justify-content: top;
+    align-items: left;
+    background-color: rgb(221, 221, 221);
+    
+    width: 20em;
+    min-width: 20em;
+    flex-shrink: 0;
+    
+    height: 38em; 
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+

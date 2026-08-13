@@ -65,11 +65,11 @@ class BallType {
     showEditPanel() {
         ballInfo.innerHTML = `
             <div class="ballInfoEditor">
-                <p><strong>Selected Ball Type</strong></p>
+            <div class="ballPreview" style="background-color:${this.color};"></div>
                 <label>Hex color:
                     <input class="colorInput" type="text" value="${this.color}" placeholder="#rrggbb">
                 </label>
-                <br>
+                
                 <label>Speed:
                     <input class="speedInput" type="number" min="1" max="20" step="0.1" value="${this.speed}"> <br>
                 </label>
@@ -244,10 +244,9 @@ function spawnBall(ballType) {
                 this.posY = Math.max(0, Math.min(this.posY, boxHeight - ballSize));
                 bounced = true;
             }
-
+            
             if (bounced && ballType.sound && !ballType.droneActive) {
-                const audio = new Audio(ballType.sound);
-                audio.play().catch(() => {});
+            playBounceSound(ballType.sound, ballType.volume);
             }
 
             if (ballType.droneActive && ballType.sound) { // 6
@@ -282,6 +281,90 @@ function createBallControl() {
     const currentBallType = ballTypes[typeIndex];
     topMenu.appendChild(currentBallType.control);
 }
+
+// 1. Initialize Web Audio API Context & MediaRecorder Setup
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const streamDestination = audioCtx.createMediaStreamDestination();
+
+let mediaRecorder;
+let recordedChunks = [];
+
+// Helper to load audio buffers from file URLs/Blobs
+const soundBufferCache = new Map();
+
+async function getAudioBuffer(url) {
+    if (!url) return null;
+    if (soundBufferCache.has(url)) return soundBufferCache.get(url);
+
+    try {
+        const response = await fetch(url);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        soundBufferCache.set(url, audioBuffer);
+        return audioBuffer;
+    } catch (e) {
+        console.error("Failed to decode audio", e);
+        return null;
+    }
+}
+
+// Helper to play bounce sounds routed to both Output and Recording Stream
+async function playBounceSound(soundUrl, volume) {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    
+    const buffer = await getAudioBuffer(soundUrl);
+    if (!buffer) return;
+
+    const source = audioCtx.createBufferSource();
+    const gainNode = audioCtx.createGain();
+
+    source.buffer = buffer;
+    gainNode.gain.value = Math.max(0, Math.min(1, volume));
+
+    // Connect sound to speakers AND recorder destination
+    source.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    gainNode.connect(streamDestination);
+
+    source.start(0);
+}
+
+// 2. Setup Recording Control Handlers
+const startRecordBtn = document.getElementById('startRecordBtn');
+const stopRecordBtn = document.getElementById('stopRecordBtn');
+
+startRecordBtn.addEventListener('click', () => {
+    recordedChunks = [];
+    
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+    mediaRecorder = new MediaRecorder(streamDestination.stream, { mimeType });
+
+    mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ball_sounds_${Date.now()}.webm`;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    mediaRecorder.start();
+    startRecordBtn.disabled = true;
+    stopRecordBtn.disabled = false;
+});
+
+stopRecordBtn.addEventListener('click', () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        startRecordBtn.disabled = false;
+        stopRecordBtn.disabled = true;
+    }
+});
 
 addNewBallBtn.addEventListener('click', createBallControl);
 createBallControl();

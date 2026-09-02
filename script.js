@@ -11,6 +11,7 @@ class BallType {
         this.speed = speed;
         this.volume = 0.5; // 1
         this.droneActive = false;
+        this.muteActive = false;
         this.spawnedBalls = [];
         this.control = this.createControl();
         this.selected = false;
@@ -84,6 +85,10 @@ class BallType {
                 <label> Drone:
                     <input class="droneInput" type="checkbox" ${this.droneActive ? 'checked' : ''}> <br> 
                 </label>
+
+                <label> Mute:
+                    <input class="muteInput" type="checkbox" ${this.muteActive ? 'checked' : ''}> <br> 
+                </label>
                 
 
                 <button class="updateButton" type="button">Update ball</button>
@@ -98,13 +103,14 @@ class BallType {
         const soundNameLabel = ballInfo.querySelector('.soundName');
         const volumeInput = ballInfo.querySelector('.volumeInput');
         const droneInput = ballInfo.querySelector('.droneInput');
+        const muteInput = ballInfo.querySelector('.muteInput');
 
         updateButton.addEventListener('click', () => {
-            this.applyInputs(colorInput, speedInput, soundInput, soundNameLabel, volumeInput, droneInput);
+            this.applyInputs(colorInput, speedInput, soundInput, soundNameLabel, volumeInput, droneInput, muteInput);
         });
     }
 
-    applyInputs(colorInput, speedInput, soundInput, soundNameLabel, volumeInput, droneInput) {
+    applyInputs(colorInput, speedInput, soundInput, soundNameLabel, volumeInput, droneInput, muteInput) {
         const rawColor = colorInput.value.trim();
         const normalized = rawColor.startsWith('#') ? rawColor : `#${rawColor}`;
         if (!isValidHexColor(normalized)) {
@@ -129,6 +135,7 @@ class BallType {
         }
         this.updateVolume(volumeInput.value);
         this.updateDrone(droneInput.checked);
+        this.updateMute(muteInput.checked);
     }
 
     updateColor(newColor) {
@@ -165,6 +172,16 @@ class BallType {
     updateDrone(isActive) {
         this.droneActive = isActive;
     }
+
+    updateMute(isActive) {
+        this.muteActive = isActive;
+        this.spawnedBalls.forEach(ball => {
+            if (ball.droneAudio) {
+                ball.droneAudio.pause();
+                ball.droneAudio = null;
+            }
+        });
+    }
 }
 
 const ballTypes = [
@@ -178,7 +195,6 @@ const ballTypes = [
     new BallType('#fce061', '', 'None', 3),
     new BallType('#ff58ee', '', 'None', 3),
     new BallType('#42d3ff', '', 'None', 3),
-
 ];
 
 function isValidHexColor(value) {
@@ -212,6 +228,7 @@ function spawnBall(ballType) {
         posX,
         posY,
         animationFrameId: null,
+        droneAudio: null,
         updateSpeed(newSpeed) {
             const xSign = this.dx >= 0 ? 1 : -1;
             const ySign = this.dy >= 0 ? 1 : -1;
@@ -222,7 +239,10 @@ function spawnBall(ballType) {
             if (this.animationFrameId !== null) {
                 cancelAnimationFrame(this.animationFrameId);
             }
-            if (droneAudio) { droneAudio.pause(); droneAudio = null; } // 5
+            if (this.droneAudio) {
+                this.droneAudio.pause();
+                this.droneAudio = null;
+            }
             this.element.remove();
         },
         move() {
@@ -244,26 +264,31 @@ function spawnBall(ballType) {
                 this.posY = Math.max(0, Math.min(this.posY, boxHeight - ballSize));
                 bounced = true;
             }
-            
-            if (bounced && ballType.sound && !ballType.droneActive) {
-            playBounceSound(ballType.sound, ballType.volume);
-            }
 
-            if (ballType.droneActive && ballType.sound) { // 6
-                if (!droneAudio) {
-                    droneAudio = new Audio(ballType.sound);
-                    droneAudio.loop = true;
-                    droneAudio.play().catch(() => {});
+            if (ballType.muteActive) {
+                if (this.droneAudio) {
+                    this.droneAudio.pause();
+                    this.droneAudio = null;
                 }
-                
-                const yRatio = Math.max(0, Math.min(1, this.posY / (boxHeight || 1)));
+            } else {
+                if (bounced && ballType.sound && !ballType.droneActive) {
+                    playBounceSound(ballType.sound, ballType.volume);
+                }
 
-            const exponent = 3; 
-            const exponentialY = Math.pow(yRatio, exponent);
+                if (ballType.droneActive && ballType.sound) {
+                    if (!this.droneAudio) {
+                        this.droneAudio = new Audio(ballType.sound);
+                        this.droneAudio.loop = true;
+                        this.droneAudio.play().catch(() => {});
+                    }
 
+                    const yRatio = Math.max(0, Math.min(1, this.posY / (boxHeight || 1)));
+                    const exponent = 3;
+                    const exponentialY = Math.pow(yRatio, exponent);
 
-            droneAudio.volume = Math.max(0, Math.min(1, ballType.volume * exponentialY));
-                droneAudio.volume = Math.max(0, Math.min(1, ballType.volume * (this.posY / (boxHeight || 1))));
+                    this.droneAudio.volume = Math.max(0, Math.min(1, ballType.volume * exponentialY));
+                    this.droneAudio.volume = Math.max(0, Math.min(1, ballType.volume * (this.posY / (boxHeight || 1))));
+                }
             }
 
             this.element.style.left = `${this.posX}px`;
@@ -343,12 +368,22 @@ startRecordBtn.addEventListener('click', () => {
         if (e.data.size > 0) recordedChunks.push(e.data);
     };
 
-    mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: mimeType });
-        const url = URL.createObjectURL(blob);
+    mediaRecorder.onstop = async () => {
+        // Create temporary WebM blob from recorded chunks
+        const webmBlob = new Blob(recordedChunks, { type: mimeType });
+        const arrayBuffer = await webmBlob.arrayBuffer();
+
+        // Decode WebM audio into an AudioBuffer using Web Audio API
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+        // Convert AudioBuffer into WAV format
+        const wavBlob = audioBufferToWav(audioBuffer);
+
+        // Download as .wav file
+        const url = URL.createObjectURL(wavBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `ball_sounds_${Date.now()}.webm`;
+        a.download = `ball_sounds_${Date.now()}.wav`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -365,6 +400,85 @@ stopRecordBtn.addEventListener('click', () => {
         stopRecordBtn.disabled = true;
     }
 });
+
+// 3. WAV Converter Helper Functions
+function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const bitDepth = 16;
+    
+    let interleaved;
+    if (numChannels === 2) {
+        interleaved = interleaveChannels(buffer.getChannelData(0), buffer.getChannelData(1));
+    } else {
+        interleaved = buffer.getChannelData(0);
+    }
+
+    return createWavFile(interleaved, numChannels, sampleRate, bitDepth);
+}
+
+function interleaveChannels(left, right) {
+    const length = left.length + right.length;
+    const result = new Float32Array(length);
+    let index = 0;
+    let inputIndex = 0;
+
+    while (index < length) {
+        result[index++] = left[inputIndex];
+        result[index++] = right[inputIndex];
+        inputIndex++;
+    }
+    return result;
+}
+
+function createWavFile(samples, numChannels, sampleRate, bitDepth) {
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+    const view = new DataView(buffer);
+
+    const writeString = (view, offset, string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+
+    /* RIFF identifier */
+    writeString(view, 0, 'RIFF');
+    /* RIFF chunk length */
+    view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+    /* RIFF type */
+    writeString(view, 8, 'WAVE');
+    /* format chunk identifier */
+    writeString(view, 12, 'fmt ');
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (1 = PCM) */
+    view.setUint16(20, 1, true);
+    /* channel count */
+    view.setUint16(22, numChannels, true);
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate */
+    view.setUint32(28, sampleRate * blockAlign, true);
+    /* block align */
+    view.setUint16(32, blockAlign, true);
+    /* bits per sample */
+    view.setUint16(34, bitDepth, true);
+    /* data chunk identifier */
+    writeString(view, 36, 'data');
+    /* data chunk length */
+    view.setUint32(40, samples.length * bytesPerSample, true);
+
+    // Convert Float32 PCM to Int16 PCM samples
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+}
 
 addNewBallBtn.addEventListener('click', createBallControl);
 createBallControl();
